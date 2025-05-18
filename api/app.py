@@ -7,7 +7,17 @@ from markdown import markdown
 import re
 from datetime import timedelta, datetime
 
-app = FastAPI()
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # on startup
+    await update_settings(Settings(user_temp=30, user_light="18:30:00", light_duration="4h"))
+    yield
+    # on shutdown
+    print("Shutting down...")
+
+app = FastAPI(lifespan=lifespan)
 @app.get("/")
 async def root():
     file_content = open("../README.md", "r").read()
@@ -48,8 +58,3 @@ async def update_settings(preferences: Settings):
     preferences_dict["light_time_off"] = (start_time + duration).time()
     print("Light time off:", preferences_dict["light_time_off"])
     return preferences
-
-#on startup
-@app.on_event("startup")
-async def startup_event():
-    await update_settings(Settings(user_temp=30, user_light="18:30:00", light_duration="4h"))
