@@ -3,6 +3,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from pydantic import BaseModel, Field
 from markdown import markdown
+from uuid import uuid4
 
 import re
 from datetime import timedelta, datetime
@@ -48,7 +49,8 @@ def parse_time(time_str):
 
 @app.put("/settings")
 async def update_settings(preferences: Settings):
-    preferences_dict = preferences.model_dump()
+    preferences_dict = {"_id": uuid4()}
+    preferences_dict.update(preferences.model_dump())
     start_time = datetime.strptime(preferences_dict["user_light"], "%H:%M:%S")
     print("Start time:", start_time.time())
     print("Light duration:", preferences_dict["light_duration"])
@@ -57,4 +59,5 @@ async def update_settings(preferences: Settings):
 
     preferences_dict["light_time_off"] = (start_time + duration).time()
     print("Light time off:", preferences_dict["light_time_off"])
-    return preferences
+   
+    return preferences_dict
