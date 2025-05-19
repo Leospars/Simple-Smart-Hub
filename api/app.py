@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from pydantic import BaseModel, Field
 from markdown import markdown
 from uuid import uuid4
+import requests 
 
 import re
 from datetime import timedelta, datetime
@@ -13,7 +14,7 @@ from contextlib import asynccontextmanager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # on startup
-    await update_settings(Settings(user_temp=30, user_light="18:30:00", light_duration="4h"))
+    await update_settings(Settings(user_temp=30, user_light="sunset", light_duration="4h"))
     yield
     # on shutdown
     print("Shutting down...")
@@ -24,10 +25,27 @@ async def root():
     file_content = open("../README.md", "r").read()
     return HTMLResponse(markdown(file_content))
 
-def get_sunset_time():
+def get_sunset_time() -> datetime:
     # Placeholder function to simulate getting sunset time
-    
-    return "18:30:00"
+    res = requests.get("https://api.ipify.org/?format=json")
+    if(ip := res.json()["ip"]):
+        res = requests.get(f"http://ip-api.com/json/{ip}")
+        if(not ("lat" in res.json().keys())):
+            raise HTTPException(status_code=500, detail="Failed to get location")
+        lat, lon = res.json()["lat"], res.json()["lon"]
+        print(f"Country: {res.json()['country']}, Lat: {lat}, Lon: {lon}")
+        res = requests.get(f"https://api.sunrise-sunset.org/json?lat={lat}&lng={lon}")
+        
+        if(res.status_code != 200):
+            raise HTTPException(status_code=500, detail="Failed to get sunset time")
+        sunset = res.json()["results"]["sunset"]
+        try: 
+            sunset_time = datetime.strptime(sunset, "%H:%M:%S %p")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail="Sunset time format may have changed from 03:45:00 PM")
+        return sunset_time
+    else: 
+        raise HTTPException(status_code=500, detail="Failed to get IP")
 
 class Settings(BaseModel):
     user_temp: int
@@ -51,7 +69,10 @@ def parse_time(time_str):
 async def update_settings(preferences: Settings):
     preferences_dict = {"_id": uuid4()}
     preferences_dict.update(preferences.model_dump())
-    start_time = datetime.strptime(preferences_dict["user_light"], "%H:%M:%S")
+    user_light = get_sunset_time().strftime("%H:%M:%S") if preferences_dict["user_light"] == "sunset" \
+        else preferences_dict["user_light"]
+    start_time = datetime.strptime(user_light, "%H:%M:%S")
+
     print("Start time:", start_time.time())
     print("Light duration:", preferences_dict["light_duration"])
     
@@ -61,3 +82,4 @@ async def update_settings(preferences: Settings):
     print("Light time off:", preferences_dict["light_time_off"])
    
     return preferences_dict
+
