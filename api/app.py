@@ -20,7 +20,7 @@ import re
 load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017") # Default to local MongoDB
 connection = AsyncIOMotorClient(MONGO_URI)
-db = connection.get_database("esp32_states")
+db = connection.get_database("simple-smart-hub")
 
 # Tests
 @asynccontextmanager
