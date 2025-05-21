@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "author": "Leon Gayle",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": -4.76, "attrs": {} },
+    {
+      "type": "board-ds18b20",
+      "id": "temp1",
+      "top": 119.38,
+      "left": 180.43,
+      "rotate": 90,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": 187.2,
+      "left": 114.65,
+      "rotate": 90,
+      "attrs": { "value": "4700" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r2",
+      "top": 42.35,
+      "left": 124.8,
+      "attrs": { "value": "330" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led1",
+      "top": -13.2,
+      "left": 195.8,
+      "attrs": { "color": "red", "flip": "1" }
+    },
+    { "type": "wokwi-pir-motion-sensor", "id": "pir1", "top": 42.4, "left": -151.38, "attrs": {} }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "esp:22", "r2:1", "green", [ "h0" ] ],
+    [ "r2:2", "led1:A", "green", [ "v0", "h27.6" ] ],
+    [ "led1:C", "esp:GND.2", "green", [ "v19.2", "h9.6", "v-57.6", "h-28.8", "v38.4" ] ],
+    [ "temp1:DQ", "esp:5", "green", [ "h-44.4", "v32.4" ] ],
+    [ "temp1:VCC", "esp:5V", "red", [ "h0", "v86.4", "h-182.4", "v-38.4" ] ],
+    [
+      "temp1:GND",
+      "esp:GND.1",
+      "black",
+      [ "h-9.6", "v-9.6", "h67.2", "v134.4", "h-249.6", "v-105.6" ]
+    ],
+    [ "r1:1", "temp1:DQ", "green", [ "h0", "v-19.2" ] ],
+    [ "r1:2", "temp1:VCC", "green", [ "h0", "v8.4", "h9.6", "v-76.8", "h9.6" ] ],
+    [ "pir1:VCC", "esp:5V", "red", [ "v0" ] ],
+    [ "pir1:GND", "esp:GND.1", "black", [ "v0" ] ],
+    [ "pir1:OUT", "esp:12", "green", [ "v0" ] ]
+  ],
+  "dependencies": {}
+}

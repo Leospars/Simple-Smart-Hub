@@ -6,3 +6,4 @@
 build
 
 sdkconfig.esp32dev
+*/env.h
