@@ -1,3 +1,7 @@
+# Python related
 api/.venv
 __pycache__/
 .vscode/
+
+# Privacy
+.env

@@ -3,3 +3,5 @@ pydantic
 uvicorn
 markdown
 requests
+motor
+python-dotenv

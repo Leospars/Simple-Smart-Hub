@@ -1,9 +1,20 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from markdown import markdown
 from uuid import uuid4
+
+from motor import motor_asyncio
+
+from bson import ObjectId 
+from pydantic import BaseModel, BeforeValidator, Field
+from motor.motor_asyncio import AsyncIOMotorClient
+from typing import Annotated
+import os
+from dotenv import load_dotenv
+
 import requests 
 
 import re
@@ -11,6 +22,14 @@ from datetime import timedelta, datetime
 
 from contextlib import asynccontextmanager
 
+# Database
+
+load_dotenv()
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017") # Default to local MongoDB
+connection = AsyncIOMotorClient(MONGO_URI)
+db = connection.get_database("esp32_states")
+
+# Tests
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # on startup
@@ -19,13 +38,25 @@ async def lifespan(app: FastAPI):
     # on shutdown
     print("Shutting down...")
 
+# Allow CORS (Cross Origin Resource Sharing)
 app = FastAPI(lifespan=lifespan)
+origins = [ "https://simple-smart-hub-client.netlify.app" ]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Routes
 @app.get("/")
 async def root():
     file_content = open("../README.md", "r").read()
     return HTMLResponse(markdown(file_content))
 
-def get_sunset_time() -> datetime:
+def get_sunset_time() -> str:
     # Placeholder function to simulate getting sunset time
     res = requests.get("https://api.ipify.org/?format=json")
     if(ip := res.json()["ip"]):
@@ -43,7 +74,8 @@ def get_sunset_time() -> datetime:
             sunset_time = datetime.strptime(sunset, "%H:%M:%S %p")
         except Exception as e:
             raise HTTPException(status_code=500, detail="Sunset time format may have changed from 03:45:00 PM")
-        return sunset_time
+        print(f"Sunset time today - {datetime.now().date()}: {sunset_time.time()}")
+        return sunset_time.strftime("%H:%M:%S")
     else: 
         raise HTTPException(status_code=500, detail="Failed to get IP")
 
@@ -67,9 +99,10 @@ def parse_time(time_str):
 
 @app.put("/settings")
 async def update_settings(preferences: Settings):
-    preferences_dict = {"_id": uuid4()}
+    # Random user ID, for future purposes get user id from login
+    preferences_dict = {"_id": None} 
     preferences_dict.update(preferences.model_dump())
-    user_light = get_sunset_time().strftime("%H:%M:%S") if preferences_dict["user_light"] == "sunset" \
+    user_light = get_sunset_time() if preferences_dict["user_light"] == "sunset" \
         else preferences_dict["user_light"]
     start_time = datetime.strptime(user_light, "%H:%M:%S")
 
@@ -78,8 +111,97 @@ async def update_settings(preferences: Settings):
     
     duration = parse_time(preferences_dict["light_duration"])
 
-    preferences_dict["light_time_off"] = (start_time + duration).time()
+    preferences_dict["light_time_off"] = str((start_time + duration).time())
     print("Light time off:", preferences_dict["light_time_off"])
-   
-    return preferences_dict
 
+    # update user settings
+    await db["settings"].update_one({"_id": preferences_dict["_id"]}, {"$set": preferences_dict}, upsert=True)
+    preferences_dict = await db["settings"].find_one({"_id": preferences_dict["_id"]})
+    return Settings(**preferences_dict)
+
+PyObjectID = Annotated[str, BeforeValidator(str)]
+
+class State(BaseModel):
+    id: PyObjectID | None = Field(default=None, alias="_id")
+    temperature: float
+    presence: bool
+    datetime: str #"2023-02-23T18:22:28"
+
+class StateCollection(BaseModel):
+    states: list[State]     
+
+# Carried out by the esp32 module
+@app.post("/state")
+async def create_state(state_req: State):
+    state_dict = state_req.model_dump()
+    print(state_dict)
+    if (not state_dict['id']):
+        state_dict.pop("id") # remove the null id before insert
+
+    inserted_state = await db["states"].insert_one(state_dict)
+    
+    state = await db["states"].find_one({"_id": inserted_state.inserted_id})
+    return State(**state)
+
+# Routes
+@app.get("/")
+async def root():
+    file_content = open("../README.md", "r").read()
+    return HTMLResponse(markdown(file_content))
+
+class Settings(BaseModel):
+    user_temp: int
+    user_light: str = Field(default_factory=get_sunset_time)
+    light_duration: str
+
+@app.put("/settings")
+async def update_settings(preferences: Settings):
+    # Random user ID, for future urposes get user id from login
+    preferences_dict = {"_id": None} 
+    preferences_dict.update(preferences.model_dump())
+    user_light = get_sunset_time() if preferences_dict["user_light"] == "sunset" \
+        else preferences_dict["user_light"]
+    start_time = datetime.strptime(user_light, "%H:%M:%S")
+
+    print("Start time:", start_time.time())
+    print("Light duration:", preferences_dict["light_duration"])
+    
+    duration = parse_time(preferences_dict["light_duration"])
+
+    preferences_dict["light_time_off"] = str((start_time + duration).time())
+    print("Light time off:", preferences_dict["light_time_off"])
+
+    # update user settings
+    await db["settings"].update_one({"_id": preferences_dict["_id"]}, {"$set": preferences_dict}, upsert=True)
+    preferences_dict = await db["settings"].find_one({"_id": preferences_dict["_id"]})
+    return Settings(**preferences_dict)
+
+PyObjectID = Annotated[str, BeforeValidator(str)]
+
+class State(BaseModel):
+    id: PyObjectID | None = Field(default=None, alias="_id")
+    temperature: float
+    presence: bool
+    datetime: str #"2023-02-23T18:22:28"
+
+class StateCollection(BaseModel):
+    states: list[State]     
+
+# Carried out by the esp32 module
+@app.post("/state")
+async def create_state(state_req: State):
+    state_dict = state_req.model_dump()
+    print(state_dict)
+    if (not state_dict['id']):
+        state_dict.pop("id") # remove the null id before insert
+
+    inserted_state = await db["states"].insert_one(state_dict)
+    
+    state = await db["states"].find_one({"_id": inserted_state.inserted_id})
+    return State(**state)
+
+@app.get("/graph")
+async def get_states(n: int = 10):
+    print(f"Return graph size: {n}")
+    state_collection = await db["states"].find().to_list(length=n)
+    return StateCollection(states=state_collection).states
