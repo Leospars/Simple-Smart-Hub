@@ -1,12 +1,14 @@
 # Simple Smart Hub
 
-The goal of this project is to build an IoT platform that controls simple appliances that are typically controlled by the flip of a switch.
+The goal of this project is to build an IoT platform that controls simple appliances that are typically controlled by the flip of a switch using the website: __[Simple Smart Hub Client](https://simple-smart-hub-client.netlify.app/)__.
 
 The platform will require:
 
 1. An Espressif ESP32 development module.
 2. Two simple load/actuator components, eg. LEDs or a lamp and a fan.
 3. A RESTful API written using the FastAPI Python framework.
+   
+4. A MongoDB database to store user setting and track enviroment changes.
 
 The platform should also allow users to interact with the IoT devices through the use of a webpage.
 
@@ -29,3 +31,5 @@ The IoT platform should combine the temperature-based control, time-base control
 To provide users with greater control over the IoT platform, they should be able to customize various settings. For example, the user should be able to specify the temperature at which the fan should turn on. Similarly, the user should be able to customize the time after which the lights should turn on and the duration for which they should stay on. These customizable settings can be accessed via a web interface (https://simple-smart-hub-client.netlify.app/) that allows the user to input their preferred values. By providing these customization options, the IoT platform can be tailored to the specific needs of the user, making it more effective and user-friendly.
 
 By implementing these features, the IoT platform can ensure that the lights only turn on when they are needed. This can save energy and reduce unnecessary light pollution. Additionally, the fan only turns on when the room temperature exceeds the user-specified temperature and a person is present. This can help save energy and create a more comfortable living environment.
+
+## [More Details](https://github.com/Leospars/Simple-Smart-Hub/blob/main/Simple%20Smart%20Hub.md)
