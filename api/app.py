@@ -1,26 +1,19 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.encoders import jsonable_encoder
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from markdown import markdown
+import os
+from contextlib import asynccontextmanager
+from datetime import timedelta, datetime
+from typing import Annotated
 from uuid import uuid4
 
-from motor import motor_asyncio
-
-from bson import ObjectId 
-from pydantic import BaseModel, BeforeValidator, Field
-from motor.motor_asyncio import AsyncIOMotorClient
-from typing import Annotated
-import os
+from bson import ObjectId
 from dotenv import load_dotenv
-
-import requests 
-
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from markdown import markdown
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel, BeforeValidator, Field
+import requests
 import re
-from datetime import timedelta, datetime
-
-from contextlib import asynccontextmanager
 
 # Database
 
@@ -50,11 +43,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routes
-@app.get("/")
-async def root():
-    file_content = open("../README.md", "r").read()
-    return HTMLResponse(markdown(file_content))
+# Functions 
+PyObjectID = Annotated[str, BeforeValidator(str)]
+regex = re.compile(r'((?P<hours>\d+?)h)?((?P<minutes>\d+?)m)?((?P<seconds>\d+?)s)?')
+
+def parse_time(time_str):
+    parts = regex.match(time_str)
+    if not parts:
+        return
+    parts = parts.groupdict()
+    time_params = {}
+    for name, param in parts.items():
+        if param:
+            time_params[name] = int(param)
+    return timedelta(**time_params)
 
 def get_sunset_time() -> str:
     # Placeholder function to simulate getting sunset time
@@ -79,23 +81,17 @@ def get_sunset_time() -> str:
     else: 
         raise HTTPException(status_code=500, detail="Failed to get IP")
 
+# Routes
+@app.get("/")
+async def root():
+    file_content = open("../README.md", "r").read()
+    return HTMLResponse(markdown(file_content))
+
+# Routes for settings
 class Settings(BaseModel):
     user_temp: int
     user_light: str = Field(default_factory=get_sunset_time)
     light_duration: str
-
-regex = re.compile(r'((?P<hours>\d+?)h)?((?P<minutes>\d+?)m)?((?P<seconds>\d+?)s)?')
-
-def parse_time(time_str):
-    parts = regex.match(time_str)
-    if not parts:
-        return
-    parts = parts.groupdict()
-    time_params = {}
-    for name, param in parts.items():
-        if param:
-            time_params[name] = int(param)
-    return timedelta(**time_params)
 
 @app.put("/settings")
 async def update_settings(preferences: Settings):
@@ -116,11 +112,10 @@ async def update_settings(preferences: Settings):
 
     # update user settings
     await db["settings"].update_one({"_id": preferences_dict["_id"]}, {"$set": preferences_dict}, upsert=True)
-    preferences_dict = await db["settings"].find_one({"_id": preferences_dict["_id"]})
+    preferences_dict = await db["settings"].find_one({"_id": preferences_dict["_id"]}) # return with auto generated id parameter
     return Settings(**preferences_dict)
 
-PyObjectID = Annotated[str, BeforeValidator(str)]
-
+# Routes for State
 class State(BaseModel):
     id: PyObjectID | None = Field(default=None, alias="_id")
     temperature: float
@@ -130,65 +125,7 @@ class State(BaseModel):
 class StateCollection(BaseModel):
     states: list[State]     
 
-# Carried out by the esp32 module
-@app.post("/state")
-async def create_state(state_req: State):
-    state_dict = state_req.model_dump()
-    print(state_dict)
-    if (not state_dict['id']):
-        state_dict.pop("id") # remove the null id before insert
-
-    inserted_state = await db["states"].insert_one(state_dict)
-    
-    state = await db["states"].find_one({"_id": inserted_state.inserted_id})
-    return State(**state)
-
-# Routes
-@app.get("/")
-async def root():
-    file_content = open("../README.md", "r").read()
-    return HTMLResponse(markdown(file_content))
-
-class Settings(BaseModel):
-    user_temp: int
-    user_light: str = Field(default_factory=get_sunset_time)
-    light_duration: str
-
-@app.put("/settings")
-async def update_settings(preferences: Settings):
-    # Random user ID, for future urposes get user id from login
-    preferences_dict = {"_id": None} 
-    preferences_dict.update(preferences.model_dump())
-    user_light = get_sunset_time() if preferences_dict["user_light"] == "sunset" \
-        else preferences_dict["user_light"]
-    start_time = datetime.strptime(user_light, "%H:%M:%S")
-
-    print("Start time:", start_time.time())
-    print("Light duration:", preferences_dict["light_duration"])
-    
-    duration = parse_time(preferences_dict["light_duration"])
-
-    preferences_dict["light_time_off"] = str((start_time + duration).time())
-    print("Light time off:", preferences_dict["light_time_off"])
-
-    # update user settings
-    await db["settings"].update_one({"_id": preferences_dict["_id"]}, {"$set": preferences_dict}, upsert=True)
-    preferences_dict = await db["settings"].find_one({"_id": preferences_dict["_id"]})
-    return Settings(**preferences_dict)
-
-PyObjectID = Annotated[str, BeforeValidator(str)]
-
-class State(BaseModel):
-    id: PyObjectID | None = Field(default=None, alias="_id")
-    temperature: float
-    presence: bool
-    datetime: str #"2023-02-23T18:22:28"
-
-class StateCollection(BaseModel):
-    states: list[State]     
-
-# Carried out by the esp32 module
-@app.post("/state")
+@app.post("/state") # Carried out by the esp32 module
 async def create_state(state_req: State):
     state_dict = state_req.model_dump()
     print(state_dict)
