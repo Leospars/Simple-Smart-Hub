@@ -1,0 +1,11 @@
+# Ignore everything (folders and files) on root only
+/*
+!api
+!vercel.json
+!.vercelignore
+!README.md
+!requirements.txt
+!*.html
+
+# Ignore Private File
+.env
