@@ -1,15 +1,14 @@
 import os
 from contextlib import asynccontextmanager
 from datetime import timedelta, datetime
-from typing import Annotated
+from typing import Annotated, Union
 
-#from bson import ObjectId
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from markdown import markdown
-#from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, BeforeValidator, Field
 import requests
 import re
@@ -18,11 +17,10 @@ from os import path
 dir_path = path.dirname(path.abspath(__file__)) 
 
 # Database
-
 load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017") # Default to local MongoDB
-# connection = AsyncIOMotorClient(MONGO_URI)
-# db = connection.get_database("simple-smart-hub")
+connection = AsyncIOMotorClient(MONGO_URI)
+db = connection.get_database("simple-smart-hub")
 
 # Tests
 @asynccontextmanager
@@ -45,8 +43,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Functions 
-PyObjectID = Annotated[str, BeforeValidator(str)]
+# Functions
+PyObjectId = Annotated[str, BeforeValidator(str)]
 regex = re.compile(r'((?P<hours>\d+?)h)?((?P<minutes>\d+?)m)?((?P<seconds>\d+?)s)?')
 
 def parse_time(time_str):
@@ -89,9 +87,14 @@ async def root():
     file_content = open(path.join(dir_path, "..", "README.md"), "r").read()
     return HTMLResponse(markdown(file_content))
 
-@app.get("/test")
-async def test():
-    return {"message": "Your vercel app is up and running 👍"}
+@app.get("/db-test")
+async def db_test():
+    name = db.name
+    try:
+        row = await db["settings"].find_one()        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Database connection failed")
+    return {"mwah": f"{name}", "row": row}
 
 # Routes for settings
 class Settings(BaseModel):
@@ -117,20 +120,19 @@ async def update_settings(preferences: Settings):
     print("Light time off:", preferences_dict["light_time_off"])
 
     # update user settings
-    # await db["settings"].update_one({"_id": preferences_dict["_id"]}, {"$set": preferences_dict}, upsert=True)
-    # preferences_dict = await db["settings"].find_one({"_id": preferences_dict["_id"]}) # return with auto generated id parameter
+    await db["settings"].update_one({"_id": preferences_dict["_id"]}, {"$set": preferences_dict}, upsert=True)
+    preferences_dict = await db["settings"].find_one({"_id": preferences_dict["_id"]}) # return with auto generated id parameter
     return Settings(**preferences_dict)
-'''
+
 # Routes for State
 class State(BaseModel):
-    id: PyObjectID | None = Field(default=None, alias="_id")
+    id: Union[PyObjectId, None] = Field(default=None, alias="_id")
     temperature: float
     presence: bool
     datetime: str #"2023-02-23T18:22:28"
 
 class StateCollection(BaseModel):
-    states: list[State]     
-
+    states: list[State]    
 @app.post("/state") # Carried out by the esp32 module
 async def create_state(state_req: State):
     state_dict = state_req.model_dump()
@@ -148,24 +150,3 @@ async def get_states(n: int = 10):
     print(f"Return graph size: {n}")
     state_collection = await db["states"].find().to_list(length=n)
     return StateCollection(states=state_collection).states
-
-# if __name__ == "__main__":
-#     import uvicorn
-#     uvicorn.run(
-#         "app:app",
-#         host="127.0.0.1",
-#         port=8000,
-#         reload=True,
-#         reload_dirs=[dir],
-#         reload_excludes=[
-#             "*/.git/*",
-#             "*/__pycache__/*",
-#             "*.pyc",
-#             "*/.pytest_cache/*",
-#             "*/.vscode/*",
-#             "*/.idea/*"
-#         ],
-#         reload_delay=1,
-#         reload_includes=["*.py", "*.html", "*.css", "*.js"]
-#     )
-'''
