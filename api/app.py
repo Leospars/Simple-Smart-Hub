@@ -83,7 +83,7 @@ def get_sunset_time() -> str:
 
 # Routes
 @app.get("/")
-async def root():
+def root():
     file_content = open(path.join(dir_path, "..", "README.md"), "r").read()
     return HTMLResponse(markdown(file_content))
 
@@ -93,6 +93,7 @@ async def db_test():
     try:
         row = await db["settings"].find_one()        
     except Exception as e:
+        print(f"Error with database: {e}")
         raise HTTPException(status_code=500, detail="Database connection failed")
     return {"mwah": f"{name}", "row": row}
 
@@ -120,13 +121,17 @@ async def update_settings(preferences: Settings):
     print("Light time off:", preferences_dict["light_time_off"])
 
     # update user settings
-    await db["settings"].update_one({"_id": preferences_dict["_id"]}, {"$set": preferences_dict}, upsert=True)
-    preferences_dict = await db["settings"].find_one({"_id": preferences_dict["_id"]}) # return with auto generated id parameter
+    try:
+        await db["settings"].update_one({"_id": preferences_dict["_id"]}, {"$set": preferences_dict}, upsert=True)
+        preferences_dict = await db["settings"].find_one({"_id": preferences_dict["_id"]}) # return with auto generated id parameter
+    except Exception as e:
+        print(f"Error with database: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update and retrieve from the databse\n\n Error: {e}")
     return Settings(**preferences_dict)
 
 # Routes for State
 class State(BaseModel):
-    id: Union[PyObjectId, None] = Field(default=None, alias="_id")
+    id: PyObjectId | None = Field(default=None, alias="_id")
     temperature: float
     presence: bool
     datetime: str #"2023-02-23T18:22:28"
@@ -140,13 +145,21 @@ async def create_state(state_req: State):
     if (not state_dict['id']):
         state_dict.pop("id") # remove the null id before insert
 
-    inserted_state = await db["states"].insert_one(state_dict)
-    
-    state = await db["states"].find_one({"_id": inserted_state.inserted_id})
+    try:
+        inserted_state = await db["states"].insert_one(state_dict)
+        state = await db["states"].find_one({"_id": inserted_state.inserted_id})
+    except Exception as e:
+        print(f"Error with database: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to insert data in database: {e}")
     return State(**state)
 
 @app.get("/graph")
 async def get_states(n: int = 10):
     print(f"Return graph size: {n}")
-    state_collection = await db["states"].find().to_list(length=n)
+    try:
+        state_collection = await db["states"].find().to_list(length=n)
+        print(f"{n} States collected: {state_collection}")
+    except Exception as e:
+        print(f"Error with database: {e}")
+        HTTPException(status_code=500, detail=f"Failed to retrieve list from database{e}")
     return StateCollection(states=state_collection).states
