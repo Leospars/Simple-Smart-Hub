@@ -20,8 +20,10 @@ POST /state
 
 GET settings example
 ```jsx
-    GET /settings 
+    GET /settings?_id={_id}
+
     {
+      "_id": {database defined _id}
     	"user_temp": 30, 
       "user_light": "18:30:00", 
       "light_time_off": "22:30:00"

@@ -102,38 +102,51 @@ async def db_test():
 class Settings(BaseModel):
     user_temp: int
     user_light: str = Field(default_factory=get_sunset_time)
-    light_duration: str
+    light_duration: str | None = Field(default=None)
+    light_time_off: str | None = Field(default=None)
 
 @app.get("/settings")
 async def get_settings(_id: str | None):
-    return await db["settings"].find_one({"_id": _id})
-
+    _id = None if not _id else _id # Accepts empty string '' as None
+    if _id is None:
+        pref = await db["settings"].find_one() # return first id for testing purposes
+    else :
+        try:
+            _id = ObjectId(_id)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail="Invalid ID format")
+        pref = await db["settings"].find_one({"_id": _id})
+    if not pref:
+        raise HTTPException(status_code=404, detail="Settings not found")
+    
+    pref['_id'] = str(pref['_id']) # Convert ObjectId to string
+    return pref
+        
 @app.put("/settings")
 async def update_settings(preferences: Settings):
-    # Random user ID, for future purposes get user id from login
-    preferences_dict = {"_id": None} 
+    preferences_dict = {"id": None} # For future purposes get user id from user login
     preferences_dict.update(preferences.model_dump())
     user_light = get_sunset_time() if preferences_dict["user_light"] == "sunset" \
         else preferences_dict["user_light"]
     start_time = datetime.strptime(user_light, "%H:%M:%S")
-
-    print("Start time:", start_time.time())
-    print("Light duration:", preferences_dict["light_duration"])
+    preferences_dict["user_light"] = str(start_time.time())
+    print("preferences_dict: ", preferences_dict)
     
     duration = parse_time(preferences_dict["light_duration"])
-
     preferences_dict["light_time_off"] = str((start_time + duration).time())
-    print("Light time off:", preferences_dict["light_time_off"])
-
+    preferences_dict.pop("light_duration") # remove light_duration from the dict
+    
     # update user settings
     try:
-        await db["settings"].update_one({"_id": preferences_dict["_id"]}, {"$set": preferences_dict}, upsert=True)
-        preferences_dict = await get_settings(preferences_dict["_id"]) # return with auto generated id parameter
+        await db["settings"].update_one({"id": preferences_dict["id"]}, {"$set": preferences_dict}, upsert=True)
+        preferences_dict = await get_settings(preferences_dict["id"]) # return with auto generated id parameter
     except Exception as e:
         print(f"Error with database: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to update and retrieve from the databse\n\n Error: {e}")
+    
+    preferences_dict.pop('id') # remove null id from the dict
     print(f"preferences: {(preferences_dict)}")
-    return Settings(**preferences_dict)
+    return preferences_dict
 
 # Routes for State
 class State(BaseModel):
@@ -144,6 +157,7 @@ class State(BaseModel):
 
 class StateCollection(BaseModel):
     states: list[State]    
+
 @app.post("/state") # Carried out by the esp32 module
 async def create_state(state_req: State):
     state_dict = state_req.model_dump()
@@ -164,7 +178,7 @@ async def get_states(n: int = 10):
     print(f"Return graph size: {n}")
     try:
         state_collection = await db["states"].find().to_list(length=n)
-        print(f"{n} States collected: {state_collection}")
+        # print(f"{n} States collected: {state_collection}")
     except Exception as e:
         print(f"Error with database: {e}")
         HTTPException(status_code=500, detail=f"Failed to retrieve list from database{e}")
