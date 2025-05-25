@@ -18,6 +18,17 @@ POST /state
 
 ```
 
+GET settings example
+```jsx
+    GET /settings 
+    {
+    	"user_temp": 30, 
+      "user_light": "18:30:00", 
+      "light_time_off": "22:30:00"
+    }
+```
+
+
 Example `env.h` for user specific details
 ```c
 #ifndef ENV_H

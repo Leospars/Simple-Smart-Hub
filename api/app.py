@@ -1,7 +1,8 @@
 import os
 from contextlib import asynccontextmanager
 from datetime import timedelta, datetime
-from typing import Annotated, Union
+from typing import Annotated
+from bson import ObjectId 
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -103,6 +104,10 @@ class Settings(BaseModel):
     user_light: str = Field(default_factory=get_sunset_time)
     light_duration: str
 
+@app.get("/settings")
+async def get_settings(_id: str | None):
+    return await db["settings"].find_one({"_id": _id})
+
 @app.put("/settings")
 async def update_settings(preferences: Settings):
     # Random user ID, for future purposes get user id from login
@@ -123,10 +128,11 @@ async def update_settings(preferences: Settings):
     # update user settings
     try:
         await db["settings"].update_one({"_id": preferences_dict["_id"]}, {"$set": preferences_dict}, upsert=True)
-        preferences_dict = await db["settings"].find_one({"_id": preferences_dict["_id"]}) # return with auto generated id parameter
+        preferences_dict = await get_settings(preferences_dict["_id"]) # return with auto generated id parameter
     except Exception as e:
         print(f"Error with database: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to update and retrieve from the databse\n\n Error: {e}")
+    print(f"preferences: {(preferences_dict)}")
     return Settings(**preferences_dict)
 
 # Routes for State
