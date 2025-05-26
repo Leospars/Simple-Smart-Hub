@@ -68,13 +68,13 @@ def get_sunset_time() -> str:
             raise HTTPException(status_code=500, detail="Failed to get location")
         lat, lon = res.json()["lat"], res.json()["lon"]
         print(f"Country: {res.json()['country']}, Lat: {lat}, Lon: {lon}")
-        res = requests.get(f"https://api.sunrise-sunset.org/json?lat={lat}&lng={lon}")
+        res = requests.get(f"https://api.sunrisesunset.io/json?lat={lat}&lng={lon}")
         
         if(res.status_code != 200):
             raise HTTPException(status_code=500, detail="Failed to get sunset time")
         sunset = res.json()["results"]["sunset"]
         try: 
-            sunset_time = datetime.strptime(sunset, "%H:%M:%S %p")
+            sunset_time = datetime.strptime(sunset, "%I:%M:%S %p")
         except Exception as e:
             raise HTTPException(status_code=500, detail="Sunset time format may have changed from 03:45:00 PM")
         print(f"Sunset time today - {datetime.now().date()}: {sunset_time.time()}")
