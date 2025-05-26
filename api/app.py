@@ -96,7 +96,7 @@ async def db_test():
     except Exception as e:
         print(f"Error with database: {e}")
         raise HTTPException(status_code=500, detail="Database connection failed")
-    return {"mwah": f"{name}", "row": row}
+    return {"mwah": f"{name}", "row": Settings(**row)}
 
 # Routes for settings
 class Settings(BaseModel):
