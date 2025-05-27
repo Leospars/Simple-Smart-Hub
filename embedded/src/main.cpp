@@ -46,9 +46,11 @@ void setup()
   pinMode(TEMP_SENSOR, INPUT);
   tempSensor.begin();
 
-  pinMode(LED_PIN, OUTPUT);
   pinMode(MOTION_PIN, INPUT);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(FAN_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
+  digitalWrite(FAN_PIN, LOW);
 
   if (IS_WOKWI)
     WiFi.begin(WOKWI_SSID, WOKWI_PWD, CHANNEL);
@@ -153,6 +155,10 @@ void loop()
     // Polling to check user set thresholds
     if(temp > float(settings["user_temp"])){
       digitalWrite(FAN_PIN, HIGH);
+      Serial.println("Too hot");
+    } else {
+      digitalWrite(FAN_PIN, LOW);
+      Serial.println("Just right, Fan stays off");
     }
 
     // Date Time format: "datetime": "2023-02-23T18:22:28"
