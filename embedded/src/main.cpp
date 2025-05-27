@@ -18,8 +18,27 @@ OneWire oneWire(TEMP_SENSOR); // For DS18B20 Temp Sensor
 DallasTemperature tempSensor(&oneWire);
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP);
+HTTPClient http;
 
 int isTimeGreater(String, String);
+
+template<typename T>
+void serialPrint(T arg) {
+  Serial.print(arg);
+}
+
+template<typename T, typename... Args>
+void serialPrint(T first, Args... args) {
+  Serial.print(first);
+  serialPrint(args...);
+}
+
+template<typename T, typename... Args>
+void serialPrintln(T first, Args... args) {
+  Serial.print(first);
+  serialPrint(args...);
+  Serial.println();
+}
 
 void setup()
 {
@@ -52,6 +71,9 @@ void setup()
 
   Serial.print("\nConnected to with IP: ");
   Serial.println(WiFi.localIP());
+
+  timeClient.begin();
+  timeClient.setTimeOffset(-5 * 3600); // Set offset to GMT-5 (EST)
 }
 
 void loop()
@@ -66,27 +88,27 @@ void loop()
     Serial.println(temp);
 
     bool presence = digitalRead(MOTION_PIN);
-    if(presence)
+    String presence_str = "false";
+    if(presence){
       Serial.println("Detecting motion");
-    else 
-      Serial.println("Waiting.. no-one here");
-
-    // Blink the LED
-    digitalWrite(LED_PIN, presence);
+      presence_str = "true";
+    }
+    else {
+      Serial.println("Nothing moving here 😔🚶‍♂️");
+      presence_str = "false";
+    }
 
     //Get timestamp
-    timeClient.begin();
     while(!timeClient.update()){
       timeClient.forceUpdate();
-      Serial.print("Forced update time");
+      Serial.println("Forced update time");
     }
     String timestamp = timeClient.getFormattedDate();
 
-    HTTPClient http;
-    String body = "{\"temperature\": " + String(temp) + ",\
-                    \"presence\": " + String(presence) + ",\
-                    \"datetime\": \"" + timestamp + "\",\
-                  }";
+    String body = "{\"temperature\": " + String(temp) + ","
+                    "\"presence\": " + presence_str + ","
+                    "\"datetime\": \"" + timestamp + "\""
+                  "}";
     Serial.print("body: ");
     Serial.println(body);
 
@@ -102,6 +124,7 @@ void loop()
       delay(100);
       return;
     }  
+    serialPrint("Post Request Response code: ", responseCode, "\r\n\n");
 
     http.begin(SETTINGS_ENDPOINT);
     responseCode = http.GET();
@@ -114,6 +137,7 @@ void loop()
     }
 
     String response = http.getString();
+    serialPrintln("User settings: ", response);
 
     JsonDocument settings;
     DeserializationError deserialize_error = deserializeJson(settings, response);
@@ -132,13 +156,14 @@ void loop()
     }
 
     // Date Time format: "datetime": "2023-02-23T18:22:28"
-    String time_now =  timestamp.substring(10);
+    String time_now =  timestamp.substring(11);
+    serialPrintln("Time now: ", time_now);
 
-    if (isTimeGreater(time_now, settings["light_time_off"]))
+    if (isTimeGreater(time_now, settings["light_time_off"]) >= 0)
     {
       Serial.println("Keep Light Off");
       digitalWrite(LED_PIN, LOW);
-    } else if (isTimeGreater(time_now, settings["user_light"])){
+    } else if (isTimeGreater(time_now, settings["user_light"]) >= 0){
       Serial.println("Keep Light On");
       digitalWrite(LED_PIN, HIGH);
     }
@@ -154,29 +179,22 @@ int isTimeGreater(String t1, String t2){
   uint hr1, min1, sec1, hr2, min2, sec2;
 
   try{
-    hr1 = t1.substring(0,1).toInt();
-    min1 = t1.substring(3,4).toInt();
-    sec1 = t1.substring(6,7).toInt();
+    hr1 = t1.substring(0,2).toInt();
+    min1 = t1.substring(3,5).toInt();
+    sec1 = t1.substring(6,8).toInt();
 
-    hr2 = t2.substring(0,1).toInt();
-    min2 = t2.substring(3,4).toInt();
-    sec2 = t2.substring(6,7).toInt();
+    hr2 = t2.substring(0,2).toInt();
+    min2 = t2.substring(3,5).toInt();
+    sec2 = t2.substring(6,8).toInt();
   }
   catch(int error){
     throw Serial.println("Invalid Time String Format");
   }
 
+  serialPrint("T1: ", hr1, ":", min1, ":", sec1, "\r\n");
+  serialPrint("T2: ", hr2, ":", min2, ":", sec2, "\r\n");
   long unsigned int epoch_t1 = hr1 * 3600 + min1 * 60 + sec1;
   long unsigned int epoch_t2 = hr2 * 3600 + min2 * 60 + sec2;
-
-  Serial.println("Successful conversion: ");
-  Serial.print("Time1: ");
-  timeClient.setEpochTime(epoch_t1);
-  Serial.println(timeClient.getFormattedTime());
-
-  Serial.print("Time2: ");
-  timeClient.setEpochTime(epoch_t2);
-  Serial.println(timeClient.getFormattedTime());
 
   if (epoch_t1 > epoch_t2)
     return 1;

@@ -34,7 +34,21 @@
       "left": 195.8,
       "attrs": { "color": "red", "flip": "1" }
     },
-    { "type": "wokwi-pir-motion-sensor", "id": "pir1", "top": 42.4, "left": -151.38, "attrs": {} }
+    { "type": "wokwi-pir-motion-sensor", "id": "pir1", "top": 42.4, "left": -151.38, "attrs": {} },
+    {
+      "type": "wokwi-resistor",
+      "id": "r3",
+      "top": 71.15,
+      "left": 163.6,
+      "attrs": { "value": "330" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led2",
+      "top": 15.6,
+      "left": 234.6,
+      "attrs": { "color": "limegreen", "flip": "1" }
+    }
   ],
   "connections": [
     [ "esp:TX", "$serialMonitor:RX", "", [] ],
@@ -54,7 +68,10 @@
     [ "r1:2", "temp1:VCC", "green", [ "h0", "v8.4", "h9.6", "v-76.8", "h9.6" ] ],
     [ "pir1:VCC", "esp:5V", "red", [ "v0" ] ],
     [ "pir1:GND", "esp:GND.1", "black", [ "v0" ] ],
-    [ "pir1:OUT", "esp:12", "green", [ "v0" ] ]
+    [ "pir1:OUT", "esp:12", "green", [ "v0" ] ],
+    [ "r3:2", "led2:A", "green", [ "v0", "h27.6" ] ],
+    [ "esp:21", "r3:1", "green", [ "h0" ] ],
+    [ "led2:C", "led1:C", "green", [ "v19.2", "h9.2", "v-67.2", "h-38.4", "v38.4", "h-9.6" ] ]
   ],
   "dependencies": {}
 }
